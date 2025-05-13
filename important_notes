@@ -1,0 +1,27 @@
+# Guideline
+
+1. All processing must be done locally - no external API calls allowed
+
+2. Use only offline (locally hosted) models via Ollama
+
+3. Focus on NLP concepts and techniques over code complexity
+
+4. Document your NLP design decisions and their rationale
+
+5. Be prepared to explain the NLP techniques you implemented
+
+6. Implementation Note: You must build the core RAG components from scratch in Python (with minimal use of libraries like numpy if needed).
+
+7. For the embedding you are allowed to depend on an existing model, be sure to explain your choice.
+
+## Resources:
+- Ollama: https://ollama.com/
+- Sentence Transformers: https://www.sbert.net/
+- RAG Tutorial: https://python.langchain.com/docs/use_cases/question_answering/
+- LLaMA: https://github.com/facebookresearch/llama
+- Vector Search Concepts: https://www.pinecone.io/learn/vector-search-basics/
+- Optional - Streamlit: https://docs.streamlit.io/
+
+# Remember:
+### Create a zip archive of the project and upload it moodle
+### Do not include the .venv folder in the zip archive (zip should be relatively small)

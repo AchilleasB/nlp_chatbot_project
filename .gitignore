@@ -1,0 +1,19 @@
+# Ignore all files in the .venv folder
+.venv/
+
+# Ignore all files in the __pycache__ folder
+__pycache__/
+
+# Ignore all files in the .vscode folder
+.vscode/
+
+# Ignore all files in the .env folder
+.env/
+
+# Keep the data folder structure but ignore contents
+!data/*/
+data/*/*
+
+
+
+
