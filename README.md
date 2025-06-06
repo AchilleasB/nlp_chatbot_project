@@ -1,11 +1,9 @@
 # NLP Project Chatbot
 
-Submission Date: 2024-03-19
+Submission Date: 2024-06-13
 Team Members:
-- [Your Name] (Student Number)
-- [Your Name] (Student Number)
-- [Your Name] (Student Number)
-- [Your Name] (Student Number)
+- Achilleas Ballanos
+- Andrii Kernitskii
 
 ## Project Overview
 
