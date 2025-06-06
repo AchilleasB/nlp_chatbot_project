@@ -1,4 +1,11 @@
+
 # NLP Chatbot Project - Local RAG System
+
+Submission Date: 2025-06-13
+
+Team Members:
+- Achilleas Ballanos
+- Andrii Kernitskii
 
 ## Project Overview
 
