@@ -5,7 +5,6 @@ import ollama
 from datetime import datetime
 import numpy as np
 import logging
-import re
 
 from ..config import DEFAULT_MODEL_NAME
 from ..models.message import Message
@@ -163,17 +162,16 @@ class ChatManager:
         """
         # Start with system message
         if context:
-            prompt = """You are a helpful AI assistant with access to relevant context. Your task is to provide a detailed and comprehensive response based on the provided context.
-
-Guidelines for your response:
-1. Use the context information to provide specific details and examples
-2. If the context contains multiple relevant pieces, combine them into a coherent response
-3. If there are any contradictions in the context, acknowledge them
-4. If the context is insufficient, say so but still provide what information you can
-5. Include specific details, numbers, or examples from the context when available
-
-Context (with relevance scores):
-"""
+            prompt = """
+            You are a helpful AI assistant with access to relevant context. Your task is to provide a detailed and comprehensive response based on the provided context.
+            Guidelines for your response:
+            1. Use the context information to provide specific details and examples
+            2. If the context contains multiple relevant pieces, combine them into a coherent response
+            3. If there are any contradictions in the context, acknowledge them
+            4. If the context is insufficient, say so but still provide what information you can
+            5. Include specific details, numbers, or examples from the context when available
+            Context (with relevance scores):
+            """
             prompt += f"{context}\n\n"
         else:
             prompt = "You are a helpful AI assistant. Answer the user's question:\n\n"

@@ -2,6 +2,9 @@
 
 import os
 import argparse
+import subprocess
+import shutil
+import time
 from typing import Tuple, Optional, List
 from pathlib import Path
 
@@ -9,17 +12,163 @@ from src.chunking.preprocessing import TextPreprocessor
 from src.embeddings import CBOWModel, DocumentEmbedder
 from src.vectordb import VectorDB
 from src.chat import ChatManager
-from src.config import DEFAULT_VECTOR_DB_PATH, DEFAULT_EMBEDDING_MODEL_PATH, INPUT_DOCUMENTS_DIR    
+from src.config import DEFAULT_VECTOR_DB_PATH, DEFAULT_EMBEDDING_MODEL_PATH, INPUT_DOCUMENTS_DIR
 
-def run_cli():
-    """Run the command-line interface for the application."""
+def check_ollama_installation() -> Tuple[bool, str]:
+    """Check if Ollama is installed and running.
+    
+    Returns:
+        Tuple of (is_installed, status_message)
+    """
+    # Check if ollama command exists
+    if not shutil.which('ollama'):
+        return False, "Ollama is not installed. Please install Ollama from https://ollama.ai"
+    
+    # Check if ollama service is running
+    try:
+        result = subprocess.run(['ollama', 'list'], 
+                              capture_output=True, 
+                              text=True, 
+                              timeout=5)
+        if result.returncode == 0:
+            return True, "Ollama is running"
+        else:
+            return False, "Ollama service is not running. Please start Ollama using 'ollama serve'"
+    except subprocess.TimeoutExpired:
+        return False, "Ollama service is not responding. Please check if it's running"
+    except Exception as e:
+        return False, f"Error checking Ollama status: {str(e)}"
+
+def start_ollama_service() -> Tuple[bool, str]:
+    """Start the Ollama service if it's not running.
+    
+    Returns:
+        Tuple of (success, status_message)
+    """
+    try:
+        # Try to start ollama serve in the background
+        process = subprocess.Popen(['ollama', 'serve'], 
+                                 stdout=subprocess.PIPE,
+                                 stderr=subprocess.PIPE)
+        
+        # Wait a bit for the service to start
+        time.sleep(2)
+        
+        # Check if it's running now
+        is_running, status = check_ollama_installation()
+        if is_running:
+            return True, "Ollama service started successfully"
+        else:
+            return False, f"Failed to start Ollama service: {status}"
+    except Exception as e:
+        return False, f"Error starting Ollama service: {str(e)}"
+
+def get_installed_models() -> Tuple[List[str], bool]:
+    """Get list of installed Ollama models.
+    
+    Returns:
+        Tuple of (list of model names, has_models)
+    """
+    try:
+        result = subprocess.run(['ollama', 'list'], 
+                              capture_output=True, 
+                              text=True, 
+                              check=True,
+                              timeout=5)
+        
+        # Parse the output
+        lines = result.stdout.strip().split('\n')
+        if len(lines) <= 1:  # Only header or empty
+            return [], False
+            
+        # Skip header line and parse model names
+        model_names = []
+        for line in lines[1:]:  # Skip header
+            if line.strip():  # Skip empty lines
+                # Split by whitespace and get the first column (model name)
+                model_name = line.split()[0]
+                # Remove :latest suffix if present
+                if model_name.endswith(':latest'):
+                    model_name = model_name[:-7]
+                model_names.append(model_name)
+        
+        return model_names, bool(model_names)
+    except Exception as e:
+        print(f"Error getting installed models: {str(e)}")
+        return [], False
+
+def run_cli(model_name: str = None):
+    """Run the command-line interface for the application.
+    
+    Args:
+        model_name: Optional name of the Ollama model to use. If not provided,
+                   will use command line arguments to determine the model.
+    """
     parser = argparse.ArgumentParser(description="NLP Chatbot with RAG")
     parser.add_argument("--add-document", help="Path to document to add to database")
     parser.add_argument("--model", default="mistral", help="Name of the Ollama model to use")
     args = parser.parse_args()
     
+    # Use provided model_name if given, otherwise use args.model
+    model_to_use = model_name if model_name is not None else args.model
+    
+    # Check Ollama installation and status
+    print("\n=== Checking Ollama Status ===")
+    is_installed, status = check_ollama_installation()
+    if not is_installed:
+        print(f"Error: {status}")
+        if "not installed" in status.lower():
+            print("\nPlease install Ollama from https://ollama.ai")
+            return
+        elif "not running" in status.lower():
+            print("\nAttempting to start Ollama service...")
+            success, start_status = start_ollama_service()
+            if not success:
+                print(f"Error: {start_status}")
+                print("\nPlease start Ollama manually using 'ollama serve'")
+                return
+            print("Success: Ollama service started")
+        else:
+            return
+    
+    # Check if the requested model is installed
+    print("\n=== Checking Model Availability ===")
+    models, has_models = get_installed_models()
+    if not has_models:
+        print("No models installed yet. Installing default model (mistral)...")
+        try:
+            subprocess.run(['ollama', 'pull', 'mistral'], check=True)
+            print("Successfully installed mistral model")
+            models = ['mistral']
+            has_models = True
+        except Exception as e:
+            print(f"Error installing model: {str(e)}")
+            print("\nPlease install a model manually using:")
+            print("  ollama pull mistral  # Recommended (~4GB)")
+            print("  ollama pull llama2   # Alternative (~4GB)")
+            print("  ollama pull codellama # For code (~4GB)")
+            return
+    
+    if model_to_use not in models:
+        print(f"Model '{model_to_use}' is not installed. Installing...")
+        try:
+            subprocess.run(['ollama', 'pull', model_to_use], check=True)
+            print(f"Successfully installed {model_to_use} model")
+        except Exception as e:
+            print(f"Error installing model: {str(e)}")
+            print(f"\nAvailable models: {', '.join(models)}")
+            print("Please choose one of the available models or install a new one using:")
+            print("  ollama pull <model_name>")
+            return
+    
+    print(f"\nUsing model: {model_to_use}")
+    print("=== Ollama Setup Complete ===\n")
+    
     # Initialize components
     embedding_model, document_embedder, vector_db, chat_manager = initialize_components()
+    
+    # Set the model name in chat manager
+    chat_manager.model_name = model_to_use
     
     # Add document if specified
     if args.add_document:
@@ -31,7 +180,6 @@ def run_cli():
         return
     
     # Interactive chat loop
-    print(f"Using model: {args.model}")
     print("Type 'quit' to exit")
     print("-" * 50)
     
