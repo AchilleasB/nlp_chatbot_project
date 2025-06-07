@@ -26,13 +26,17 @@ A Python-based chatbot that leverages Retrieval-Augmented Generation (RAG) to pr
 - **Interactive Interfaces**:
   - Command-Line Interface (CLI) for basic interaction and document processing.
   - Streamlit Web Interface for a user-friendly chat and document management experience.
+- **Automatic Setup**:
+  - Automatic detection and startup of Ollama service.
+  - Automatic model installation and management.
+  - Seamless experience in both CLI and web interfaces.
 
 ## Installation
 
 ### Prerequisites
 
 - Python 3.8 or higher.
-- [Ollama](https://ollama.com/) installed and running locally. You will need to pull a language model (e.g., `ollama pull mistral`).
+- [Ollama](https://ollama.com/) installed on your system (the application will help you install and start it if needed).
 - Git for cloning the repository.
 
 ### Setup Steps
@@ -64,14 +68,9 @@ A Python-based chatbot that leverages Retrieval-Augmented Generation (RAG) to pr
     pip install -r requirements.txt
     ```
 
-4.  **Download a language model using Ollama:**
-    ```bash
-    ollama pull mistral # Or any other preferred model
-    ```
-
 ## Usage
 
-The application can be run in two modes: Command-Line Interface (CLI) or Streamlit Web Interface.
+The application can be run in two modes: Command-Line Interface (CLI) or Streamlit Web Interface. Both interfaces will automatically handle Ollama setup and model management.
 
 ### Streamlit Web Interface
 
@@ -84,15 +83,27 @@ streamlit run app.py
 ```
 Open the provided URL in your web browser.
 
+The web interface will:
+- Check if Ollama is installed and running
+- Show available models and allow model selection
+- Provide instructions for installing new models if needed
+- Allow document management and chat interaction
+
 ### Command-Line Interface (CLI)
 
-The CLI allows for basic chat interaction and adding documents directly via the terminal.
+The CLI provides a streamlined interface for chat interaction and document management. It automatically handles Ollama setup and model installation.
 
 To start the CLI chat:
 ```bash
 # Make sure your virtual environment is activated
-python app.py
+python app.py --model mistral  # Specify your preferred model
 ```
+
+The CLI will:
+- Check if Ollama is installed and running
+- Start Ollama service if it's not running
+- Install the specified model if it's not already installed
+- Provide helpful error messages and instructions if needed
 
 To add a document using the CLI:
 ```bash
@@ -110,7 +121,9 @@ The system is built around a RAG architecture with custom components for documen
 -   **Embedding Generation (`src/embeddings/`)**: Implements a local model (e.g., Word2Vec/CBOW) to convert text chunks into numerical vector representations.
 -   **Vector Database (`src/vectordb/`)**: Stores the generated vectors and supports efficient similarity search to find relevant document chunks for a given query.
 -   **Chat System (`src/chat/`)**: Manages conversation flow, retrieves relevant context from the vector database using RAG, and interacts with the local language model (Ollama) to generate responses.
--   **Core Logic (`src/core.py`)**: Initializes the main application components and provides the bridge between the UI/CLI and the core RAG system.
+-   **Core Logic (`src/core.py`)**: Initializes the main application components, manages Ollama setup, and provides the bridge between the UI/CLI and the core RAG system.
+-   **Web Interface (`streamlit_app.py`)**: Provides the Streamlit web interface for document management and chat interaction.
+-   **Main Entry Point (`app.py`)**: Handles application startup and mode selection (CLI or Streamlit).
 
 ## Project Structure
 
@@ -126,10 +139,11 @@ nlp_chatbot_project/
 │   ├── chunking/        # Contains TextPreprocessor and chunking logic
 │   ├── embeddings/      # Contains embedding model implementation (CBOWModel) and DocumentEmbedder
 │   ├── vectordb/        # Contains VectorDB implementation
-│   └── core.py          # Entry point for core application logic and CLI
+│   └── core.py          # Core application logic, Ollama management, and CLI
 ├── requirements.txt     # List of Python dependencies
-├── app.py               # Streamlit web application interface and main entry point
-└── README.md            # Project description and instructions
+├── app.py              # Main entry point (CLI/Streamlit mode selection)
+├── streamlit_app.py    # Streamlit web application interface
+└── README.md           # Project description and instructions
 ```
 
 ## Known Limitations
@@ -137,7 +151,8 @@ nlp_chatbot_project/
 -   Performance for document processing and chat can vary based on system resources and model size.
 -   Memory usage scales with the size of the document collection.
 -   Currently supports `.txt` and `.docx` file formats.
--   Requires a local Ollama installation and a downloaded model.
+-   Requires Ollama to be installed on the system (the application will help with setup).
 -   Limited to the capabilities and language support of the chosen local language model.
+-   Model downloads can take significant time depending on your internet connection.
 
 ---
