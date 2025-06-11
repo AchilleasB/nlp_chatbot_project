@@ -21,5 +21,7 @@ __pycache__/
 
 # Project specific
 data/vector_store/*
+!data/vector_store/.gitkeep
 data/raw/*
+!data/raw/.gitkeep
 *.log 
