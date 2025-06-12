@@ -24,9 +24,9 @@ pip install -r requirements.txt
 - Visit https://ollama.com/
 - Run: `ollama pull mistral`
 
-3. Start the chatbot:
+3. Start the chatbot (Windows):
 ```bash
-python app.py
+python app.py # Mac/Linux: python3 app.py
 ```
 
 ## Commands
