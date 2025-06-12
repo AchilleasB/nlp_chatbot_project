@@ -5,6 +5,7 @@ import signal
 import sys
 import requests
 import time
+import threading
 
 ollama_process = None
 
@@ -59,7 +60,14 @@ def check_ollama():
     print("Failed to start Ollama.")
     return False
 
-# Register cleanup and signals
+# Register cleanup
 atexit.register(cleanup_ollama)
-signal.signal(signal.SIGINT, lambda *_: sys.exit(0))
-signal.signal(signal.SIGTERM, lambda *_: sys.exit(0))
+
+# Only register signals in the main thread
+if threading.current_thread() is threading.main_thread():
+    try:
+        signal.signal(signal.SIGINT, lambda *_: sys.exit(0))
+        signal.signal(signal.SIGTERM, lambda *_: sys.exit(0))
+    except ValueError:
+        # Ignore signal registration errors in non-main threads
+        pass
