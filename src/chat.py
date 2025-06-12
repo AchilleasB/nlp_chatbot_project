@@ -31,42 +31,6 @@ class ChatBot:
         self.ollama_url = ollama_url
         self.context_window = context_window
         self.conversation_history: List[Dict] = []
-        
-        # Simple conversational words that don't need document context
-        self.conversational_words = {
-            'thanks', 'thank', 'thx', 'ty',
-            'hi', 'hello', 'hey',
-            'bye', 'goodbye',
-            'yes', 'no', 'ok', 'okay', 'sure',
-            'please', 'sorry'
-        }
-
-    def _needs_context(self, query: str) -> bool:
-        """
-        Check if a query needs document context.
-        Short queries or those containing conversational words don't need context.
-        
-        Args:
-            query: User query string
-            
-        Returns:
-            True if the query needs document context
-        """
-        # Clean and lowercase the query
-        query = query.strip().lower()
-        
-        # If query is very short (3 words or less), it's probably conversational
-        if len(query.split()) <= 3:
-            # Check if it contains any conversational words
-            words = set(query.split())
-            if words.intersection(self.conversational_words):
-                return False
-            
-            # If it's just punctuation or very short, it's conversational
-            if len(query) <= 5 or query.replace('?', '').replace('!', '').strip() == '':
-                return False
-        
-        return True
 
     def _format_context(self, chunks: List[Tuple[TextChunk, float]]) -> str:
         """
@@ -110,12 +74,13 @@ class ChatBot:
         # System message
         if context:
             prompt = """
-            You are a helpful AI assistant that answers questions based on the provided context.
-            Your responses should be:
-            1. Accurate and based only on the given context
-            2. Clear and concise
-            3. Professional and informative
-            4. If the context doesn't contain relevant information, say so
+            You are a helpful AI assistant that answers questions based ONLY on the provided context.
+            Your responses MUST:
+            1. Be based STRICTLY on the given context - if the context doesn't contain relevant information, say "I don't have enough information in the provided context to answer that question."
+            2. Be clear and concise
+            3. Be professional and informative
+            4. NOT make up or infer information not present in the context
+            5. If the context seems irrelevant to the question, say so
 
             Context:
             {context}
@@ -127,9 +92,10 @@ class ChatBot:
             """
         else:
             prompt = """
-            You are a helpful AI assistant. For this conversational query, provide a brief, 
-            friendly response without referring to any specific context. Keep your response 
-            concise and natural.
+            You are a helpful AI assistant. For this query, provide a brief, 
+            friendly response. If the user asks about topics that should be answered using 
+            the project documents, tell them to rephrase their question to be more specific 
+            about the project context.
 
             Previous conversation:
             {history}
@@ -185,14 +151,21 @@ class ChatBot:
         Returns:
             Generated response
         """
-        # Check if this query needs document context
-        if self._needs_context(query):
-            # For document queries, retrieve and include context
-            chunks = self.vector_db.search(query, top_k=3)
-            context = self._format_context(chunks)
-            prompt = self._format_prompt(query, context, self.conversation_history)
+        # Try to find relevant context for every query
+        chunks = self.vector_db.search(query, top_k=3, threshold=0.6)  # Threshold for relevance
+        
+        if chunks:
+            # Check if any of the chunks are actually relevant
+            relevant_chunks = [(chunk, score) for chunk, score in chunks if score > 0.7]  # Relevance threshold
+            
+            if relevant_chunks:
+                context = self._format_context(relevant_chunks)
+                prompt = self._format_prompt(query, context, self.conversation_history)
+            else:
+                # If no highly relevant chunks found, treat as conversational
+                prompt = self._format_prompt(query, conversation_history=self.conversation_history)
         else:
-            # For conversational queries, skip document retrieval
+            # No relevant chunks found, treat as conversational
             prompt = self._format_prompt(query, conversation_history=self.conversation_history)
         
         # Generate response
