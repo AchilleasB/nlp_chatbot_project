@@ -31,7 +31,43 @@ class ChatBot:
         self.ollama_url = ollama_url
         self.context_window = context_window
         self.conversation_history: List[Dict] = []
-    
+        
+        # Simple conversational words that don't need document context
+        self.conversational_words = {
+            'thanks', 'thank', 'thx', 'ty',
+            'hi', 'hello', 'hey',
+            'bye', 'goodbye',
+            'yes', 'no', 'ok', 'okay', 'sure',
+            'please', 'sorry'
+        }
+
+    def _needs_context(self, query: str) -> bool:
+        """
+        Check if a query needs document context.
+        Short queries or those containing conversational words don't need context.
+        
+        Args:
+            query: User query string
+            
+        Returns:
+            True if the query needs document context
+        """
+        # Clean and lowercase the query
+        query = query.strip().lower()
+        
+        # If query is very short (3 words or less), it's probably conversational
+        if len(query.split()) <= 3:
+            # Check if it contains any conversational words
+            words = set(query.split())
+            if words.intersection(self.conversational_words):
+                return False
+            
+            # If it's just punctuation or very short, it's conversational
+            if len(query) <= 5 or query.replace('?', '').replace('!', '').strip() == '':
+                return False
+        
+        return True
+
     def _format_context(self, chunks: List[Tuple[TextChunk, float]]) -> str:
         """
         Format retrieved chunks into context for the LLM.
@@ -42,6 +78,9 @@ class ChatBot:
         Returns:
             Formatted context string
         """
+        if not chunks:
+            return "No relevant context found."
+            
         context_parts = []
         for chunk, similarity in chunks:
             # Add metadata if available
@@ -55,46 +94,59 @@ class ChatBot:
     
     def _format_prompt(self, 
                       query: str, 
-                      context: str, 
-                      conversation_history: List[Dict]) -> str:
+                      context: Optional[str] = None, 
+                      conversation_history: List[Dict] = None) -> str:
         """
         Format the prompt for the LLM.
         
         Args:
             query: User query
-            context: Retrieved context
+            context: Retrieved context (optional)
             conversation_history: Previous conversation messages
             
         Returns:
             Formatted prompt string
         """
         # System message
-        prompt = """
-        You are a helpful AI assistant that answers questions based on the provided context.
-        Your responses should be:
-        1. Accurate and based only on the given context
-        2. Clear and concise
-        3. Professional and informative
-        4. If the context doesn't contain relevant information, say so
+        if context:
+            prompt = """
+            You are a helpful AI assistant that answers questions based on the provided context.
+            Your responses should be:
+            1. Accurate and based only on the given context
+            2. Clear and concise
+            3. Professional and informative
+            4. If the context doesn't contain relevant information, say so
 
-        Context:
-        {context}
+            Context:
+            {context}
 
-        Previous conversation:
-        {history}
+            Previous conversation:
+            {history}
 
-        User: {query}
-        """
+            User: {query}
+            """
+        else:
+            prompt = """
+            You are a helpful AI assistant. For this conversational query, provide a brief, 
+            friendly response without referring to any specific context. Keep your response 
+            concise and natural.
+
+            Previous conversation:
+            {history}
+
+            User: {query}
+            """
         
         # Format conversation history
         history_str = ""
-        for msg in conversation_history[-self.context_window:]:
-            role = msg["role"]
-            content = msg["content"]
-            history_str += f"{role}: {content}\n"
+        if conversation_history:
+            for msg in conversation_history[-self.context_window:]:
+                role = msg["role"]
+                content = msg["content"]
+                history_str += f"{role}: {content}\n"
         
         return prompt.format(
-            context=context,
+            context=context or "",
             history=history_str,
             query=query
         )
@@ -133,12 +185,15 @@ class ChatBot:
         Returns:
             Generated response
         """
-        # Retrieve relevant context
-        chunks = self.vector_db.search(query, top_k=3)
-        context = self._format_context(chunks)
-        
-        # Format prompt with context and conversation history
-        prompt = self._format_prompt(query, context, self.conversation_history)
+        # Check if this query needs document context
+        if self._needs_context(query):
+            # For document queries, retrieve and include context
+            chunks = self.vector_db.search(query, top_k=3)
+            context = self._format_context(chunks)
+            prompt = self._format_prompt(query, context, self.conversation_history)
+        else:
+            # For conversational queries, skip document retrieval
+            prompt = self._format_prompt(query, conversation_history=self.conversation_history)
         
         # Generate response
         response = self._call_ollama(prompt)
@@ -185,12 +240,12 @@ class ChatBot:
         """
         if command == "/help":
             return """
-Available commands:
-/help  - Show this help message
-/reset - Reset conversation history
-/load  - Load documents from data/raw directory
-/stats - Show vector database statistics
-/exit  - Exit the chatbot
+            Available commands:
+            /help  - Show this help message
+            /reset - Reset conversation history
+            /load  - Load documents from data/raw directory
+            /stats - Show vector database statistics
+            /exit  - Exit the chatbot
             """
         
         elif command == "/reset":
@@ -203,11 +258,11 @@ Available commands:
         elif command == "/stats":
             stats = self.vector_db.get_stats()
             return f"""
-Vector Database Statistics:
-- Number of chunks: {stats['num_chunks']}
-- Embedding dimension: {stats['embedding_dimension']}
-- Storage path: {stats['storage_path']}
-- Total size: {stats['total_size_mb']:.2f} MB
+            Vector Database Statistics:
+            - Number of chunks: {stats['num_chunks']}
+            - Embedding dimension: {stats['embedding_dimension']}
+            - Storage path: {stats['storage_path']}
+            - Total size: {stats['total_size_mb']:.2f} MB
             """
         
         elif command == "/exit":

@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """
 Main application entry point for the NLP chatbot system.
 This module provides the command-line interface and orchestrates the components.
