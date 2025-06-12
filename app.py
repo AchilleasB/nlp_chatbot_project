@@ -7,6 +7,8 @@ This module provides the command-line interface and orchestrates the components.
 import sys
 import subprocess
 import shutil
+import atexit
+import signal
 from pathlib import Path
 import typer
 from src.preprocessing import TextPreprocessor
@@ -15,15 +17,47 @@ from src.chat import ChatBot
 
 app = typer.Typer()
 
+# Global variable to track Ollama process
+ollama_process = None
+
+def cleanup_ollama():
+    """Cleanup function to stop Ollama when the app exits."""
+    global ollama_process
+    if ollama_process is not None:
+        try:
+            print("\nStopping Ollama...")
+            ollama_process.terminate()
+            ollama_process.wait(timeout=5)  # Wait up to 5 seconds for graceful shutdown
+            print("Ollama stopped successfully.")
+        except subprocess.TimeoutExpired:
+            print("Ollama did not stop gracefully, forcing termination...")
+            ollama_process.kill()
+        except Exception as e:
+            print(f"Error stopping Ollama: {str(e)}")
+        finally:
+            ollama_process = None
+
+def signal_handler(signum, frame):
+    """Handle termination signals."""
+    print("\nReceived termination signal. Cleaning up...")
+    cleanup_ollama()
+    sys.exit(0)
+
+# Register cleanup function and signal handlers
+atexit.register(cleanup_ollama)
+signal.signal(signal.SIGINT, signal_handler)
+signal.signal(signal.SIGTERM, signal_handler)
+
 def is_ollama_installed() -> bool:
     """Check if Ollama is installed on the system."""
     return shutil.which("ollama") is not None
 
 def start_ollama() -> bool:
     """Start the Ollama service if it's not running."""
+    global ollama_process
     try:
         # Try to start Ollama in the background
-        subprocess.Popen(["ollama", "serve"], 
+        ollama_process = subprocess.Popen(["ollama", "serve"], 
                         stdout=subprocess.DEVNULL,
                         stderr=subprocess.DEVNULL)
         # Wait a bit for the service to start
@@ -103,86 +137,95 @@ def main(
     """
     Start the NLP chatbot system.
     """
-    # Check if Ollama is running
-    if not check_ollama():
-        print("Error: Ollama is not running.")
-        print("Visit https://ollama.com/ for installation instructions.")
-        sys.exit(1)
-    
-    # Initialize components
-    print("\nInitializing NLP Chatbot System")
-    
-    # Create vector database
-    print("\nInitializing vector database...")
-    vector_db = VectorDB()
-    
-    # Check if we need to process documents
-    if not vector_db.chunks:
-        if not data_dir.exists():
-            print(f"Warning: Data directory '{data_dir}' does not exist.")
-            print("Please add your documents to the data/raw directory and restart the application.")
-            if not typer.confirm("Do you want to continue without documents?"):
-                sys.exit(0)
-        else:
-            # Process documents
-            print("\nProcessing documents...")
-            preprocessor = TextPreprocessor(
-                max_chunk_size=chunk_size,
-                overlap_size=overlap
-            )
-            
-            chunks = preprocessor.process_directory(data_dir)
-            if not chunks:
-                print("No documents found in the data directory.")
+    try:
+        # Check if Ollama is running
+        if not check_ollama():
+            print("Error: Ollama is not running.")
+            print("Visit https://ollama.com/ for installation instructions.")
+            sys.exit(1)
+        
+        # Initialize components
+        print("\nInitializing NLP Chatbot System")
+        
+        # Create vector database
+        print("\nInitializing vector database...")
+        vector_db = VectorDB()
+        
+        # Check if we need to process documents
+        if not vector_db.chunks:
+            if not data_dir.exists():
+                print(f"Warning: Data directory '{data_dir}' does not exist.")
                 print("Please add your documents to the data/raw directory and restart the application.")
                 if not typer.confirm("Do you want to continue without documents?"):
+                    cleanup_ollama()
                     sys.exit(0)
             else:
-                print(f"Processed {len(chunks)} chunks from documents.")
+                # Process documents
+                print("\nProcessing documents...")
+                preprocessor = TextPreprocessor(
+                    max_chunk_size=chunk_size,
+                    overlap_size=overlap
+                )
                 
-                # Add chunks to vector database
-                print("\nCreating embeddings...")
-                vector_db.add_chunks(chunks)
-                print("Embeddings created and stored.")
-    else:
-        print("Using existing vector database.")
-    
-    # Initialize chatbot
-    print("\nInitializing chatbot...")
-    chatbot = ChatBot(vector_db, model_name=model)
-    print("Chatbot initialized.")
-    
-    # Print welcome message
-    print_welcome(vector_db)
-    
-    # Start chat loop
-    while True:
-        try:
-            # Get user input
-            query = input("\nYou: ").strip()
-            
-            # Skip empty messages
-            if not query:
-                continue
-            
-            # Handle commands
-            if query.startswith("/"):
-                response = chatbot.handle_command(query)
-                if response == "exit":
-                    break
-                if response:
-                    print(f"\nAssistant: {response}")
-                continue
-            
-            # Process query
-            response = chatbot.process_query(query)
-            print(f"\nAssistant: {response}")
-            
-        except KeyboardInterrupt:
-            print("\nExiting...")
-            break
-        except Exception as e:
-            print(f"\nError: {str(e)}")
+                chunks = preprocessor.process_directory(data_dir)
+                if not chunks:
+                    print("No documents found in the data directory.")
+                    print("Please add your documents to the data/raw directory and restart the application.")
+                    if not typer.confirm("Do you want to continue without documents?"):
+                        cleanup_ollama()
+                        sys.exit(0)
+                else:
+                    print(f"Processed {len(chunks)} chunks from documents.")
+                    
+                    # Add chunks to vector database
+                    print("\nCreating embeddings...")
+                    vector_db.add_chunks(chunks)
+                    print("Embeddings created and stored.")
+        else:
+            print("Using existing vector database.")
+        
+        # Initialize chatbot
+        print("\nInitializing chatbot...")
+        chatbot = ChatBot(vector_db, model_name=model)
+        print("Chatbot initialized.")
+        
+        # Print welcome message
+        print_welcome(vector_db)
+        
+        # Start chat loop
+        while True:
+            try:
+                # Get user input
+                query = input("\nYou: ").strip()
+                
+                # Skip empty messages
+                if not query:
+                    continue
+                
+                # Handle commands
+                if query.startswith("/"):
+                    response = chatbot.handle_command(query)
+                    if response == "exit":
+                        cleanup_ollama()
+                        break
+                    if response:
+                        print(f"\nAssistant: {response}")
+                    continue
+                
+                # Process query
+                response = chatbot.process_query(query)
+                print(f"\nAssistant: {response}")
+                
+            except KeyboardInterrupt:
+                print("\nExiting...")
+                cleanup_ollama()
+                break
+            except Exception as e:
+                print(f"\nError: {str(e)}")
+    except Exception as e:
+        print(f"\nFatal error: {str(e)}")
+        cleanup_ollama()
+        sys.exit(1)
 
 if __name__ == "__main__":
     app() 
