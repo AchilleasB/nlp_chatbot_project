@@ -426,7 +426,7 @@ def main():
         # Get response from chat manager
         with st.chat_message("assistant"):
             with st.spinner("Thinking..."):
-                response = st.session_state.chat_manager.get_response(prompt)
+                response = st.session_state.chat_manager.chat(prompt)
                 st.markdown(response)
                 st.session_state.messages.append({"role": "assistant", "content": response})
 
