@@ -1,5 +1,11 @@
 # NLP Project Chatbot
 
+## Team
+Achilleas Ballanos
+Andrii Kernytskyi
+
+Class IT3B Group 8
+
 A custom-built RAG (Retrieval-Augmented Generation) chatbot system that processes and discusses project documents using local LLM integration. The system features both a command-line interface and a modern web UI.
 
 ## Features
