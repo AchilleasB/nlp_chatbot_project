@@ -5,6 +5,8 @@ This module provides the command-line interface and orchestrates the components.
 """
 
 import sys
+import subprocess
+import shutil
 from pathlib import Path
 import typer
 from src.preprocessing import TextPreprocessor
@@ -13,13 +15,53 @@ from src.chat import ChatBot
 
 app = typer.Typer()
 
+def is_ollama_installed() -> bool:
+    """Check if Ollama is installed on the system."""
+    return shutil.which("ollama") is not None
+
+def start_ollama() -> bool:
+    """Start the Ollama service if it's not running."""
+    try:
+        # Try to start Ollama in the background
+        subprocess.Popen(["ollama", "serve"], 
+                        stdout=subprocess.DEVNULL,
+                        stderr=subprocess.DEVNULL)
+        # Wait a bit for the service to start
+        import time
+        time.sleep(2)
+        return True
+    except Exception as e:
+        print(f"Error starting Ollama: {str(e)}")
+        return False
+
 def check_ollama() -> bool:
-    """Check if Ollama is running and accessible."""
+    """Check if Ollama is installed and running, start it if needed."""
+    # First check if Ollama is installed
+    if not is_ollama_installed():
+        print("Error: Ollama is not installed on your system.")
+        print("Please visit https://ollama.com/ to download and install Ollama.")
+        print("After installation, restart this application.")
+        return False
+    
+    # Check if Ollama is running
     import requests
     try:
         response = requests.get("http://localhost:11434/api/tags")
-        return response.status_code == 200
+        if response.status_code == 200:
+            return True
     except:
+        # Ollama is not running, try to start it
+        print("Ollama is not running. Attempting to start it...")
+        if start_ollama():
+            # Verify it started successfully
+            try:
+                response = requests.get("http://localhost:11434/api/tags")
+                if response.status_code == 200:
+                    print("Successfully started Ollama.")
+                    return True
+            except:
+                pass
+        print("Failed to start Ollama. Please start it manually and try again.")
         return False
 
 def print_welcome(vector_db) -> None:
