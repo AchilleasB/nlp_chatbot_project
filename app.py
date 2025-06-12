@@ -159,7 +159,11 @@ def main(
     while True:
         try:
             # Get user input
-            query = input("\nYou: ")
+            query = input("\nYou: ").strip()
+            
+            # Skip empty messages
+            if not query:
+                continue
             
             # Handle commands
             if query.startswith("/"):
