@@ -157,14 +157,17 @@ class TextPreprocessor():
         # Split text into chunks
         chunks = self.text_splitter.split_text(text)
         
-        # Train model if not trained
-        if not self.embedding_model.is_trained:
+        # Only train model if not already trained and we have chunks
+        if not self.embedding_model.is_trained and chunks:
             print("Training embedding model on chunks...")
             self.embedding_model.train(chunks)
         
-        # Generate embeddings and add to vector database
-        embeddings = self.document_embedder.get_embeddings(chunks)
-        self.vector_db.add_vectors(embeddings, chunks)
+        # Generate embeddings and add to vector database (only if model is trained)
+        if self.embedding_model.is_trained and chunks:
+            embeddings = self.document_embedder.get_embeddings(chunks)
+            self.vector_db.add_vectors(embeddings, chunks)
+        else:
+            print("Warning: Cannot generate embeddings - model not trained or no chunks")
         
         return chunks
     
@@ -180,12 +183,12 @@ class TextPreprocessor():
         text = self.load_document(file_path)
         return self.process_text(text)
     
-    def process_directory(self, directory: str, file_pattern: str = "*.docx", save_processed: bool = True) -> List[str]:
+    def process_directory(self, directory: str, file_pattern: str = "*", save_processed: bool = True) -> List[str]:
         """Process all matching documents in a directory.
         
         Args:
             directory: Directory path
-            file_pattern: Glob pattern for files to process
+            file_pattern: Glob pattern for files to process (default: "*" to process all supported files)
             save_processed: Whether to save processed chunks to files
             
         Returns:
@@ -199,8 +202,19 @@ class TextPreprocessor():
         if save_processed:
             processed_dir.mkdir(parents=True, exist_ok=True)
         
+        # Get all supported files (.txt and .docx)
+        txt_files = list(directory.glob("*.txt"))
+        docx_files = list(directory.glob("*.docx"))
+        all_files = txt_files + docx_files
+        
+        if not all_files:
+            print(f"No supported documents found in {directory}")
+            return []
+        
+        print(f"Found {len(all_files)} documents to process")
+        
         # Process each document
-        for file_path in directory.glob(file_pattern):
+        for file_path in all_files:
             try:
                 print(f"\nProcessing {file_path.name}...")
                 chunks = self.process_document(str(file_path))
@@ -210,12 +224,13 @@ class TextPreprocessor():
                     self.save_chunks(chunks, processed_dir / f"{file_path.stem}_chunks.txt")
                 
                 all_chunks.extend(chunks)
+                print(f"Generated {len(chunks)} chunks from {file_path.name}")
                 
             except Exception as e:
                 print(f"Error processing {file_path}: {str(e)}")
                 continue
         
-        if save_processed:
+        if save_processed and all_chunks:
             print(f"\nAll processed chunks saved to {processed_dir}")
             print(f"Total chunks across all documents: {len(all_chunks)}")
         
