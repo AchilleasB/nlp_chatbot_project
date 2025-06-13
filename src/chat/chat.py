@@ -24,8 +24,8 @@ class ChatManager:
         num_context_chunks: int = 3,
         min_relevance_score: float = 0.7,
         max_history_messages: int = 4,
-        max_context_length: int = 2000,
-        context_relevance_threshold: float = 0.8
+        max_context_length: int = 4000,
+        context_relevance_threshold: float = 0.7
     ):
         """Initialize the chat manager.
         
@@ -131,14 +131,17 @@ class ChatManager:
             total_length = 0
             
             logger.info("Selecting top most relevant chunks for response...")
-            for text, score in sorted(results, key=lambda x: x[1], reverse=True)[:self.num_context_chunks]: 
+            sorted_results = sorted(results, key=lambda x: x[1], reverse=True)[:self.num_context_chunks]
+            
+            for i, (text, score) in enumerate(sorted_results, 1):
                 chunk_length = len(text)
                 if total_length + chunk_length > self.max_context_length:
+                    logger.info(f"Stopping at chunk {i} due to length limit (current: {total_length}, limit: {self.max_context_length})")
                     break
                     
                 context_chunks.append(f"[Relevance: {score:.3f}] {text}")
                 total_length += chunk_length
-                logger.debug(f"Added chunk with score {score:.3f}")
+                logger.info(f"Added chunk {i} with score {score:.3f} (length: {chunk_length})")
             
             if not context_chunks:
                 logger.warning("No chunks met the relevance threshold")
@@ -163,20 +166,22 @@ class ChatManager:
         """
         # Start with system message
         if context:
-            prompt = """You are a helpful AI assistant with access to relevant context. Your task is to provide a detailed and comprehensive response based on the provided context.
+            prompt = """You are a helpful AI assistant with access to relevant context from multiple document chunks. Provide a CONCISE but COMPREHENSIVE response that synthesizes information from ALL provided chunks.
 
 Guidelines for your response:
-1. Use the context information to provide specific details and examples
-2. If the context contains multiple relevant pieces, combine them into a coherent response
-3. If there are any contradictions in the context, acknowledge them
-4. If the context is insufficient, say so but still provide what information you can
-5. Include specific details, numbers, or examples from the context when available
+1. Use ALL 3 chunks of context provided - synthesize them into one coherent response
+2. Be concise and to-the-point while covering all relevant information
+3. If chunks contain related information, combine them logically
+4. If chunks cover different aspects, address each aspect briefly but completely
+5. Include key details, numbers, and examples from the context
+6. Structure your response clearly and avoid repetition
+7. Keep the response focused and actionable
 
-Context (with relevance scores):
+Context (synthesize ALL 3 chunks):
 """
             prompt += f"{context}\n\n"
         else:
-            prompt = "You are a helpful AI assistant. Answer the user's question:\n\n"
+            prompt = "You are a helpful AI assistant. Provide a concise answer:\n\n"
         
         # Add conversation history
         if self.conversation_history:
