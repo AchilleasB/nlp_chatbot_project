@@ -5,7 +5,7 @@ Submission Date: 2025-06-13
 
 Team Members:
 - Achilleas Ballanos
-- Andrii Kernitskii
+- Andrii Kernytskyi
 
 ## Project Overview
 
