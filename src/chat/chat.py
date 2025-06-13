@@ -5,7 +5,6 @@ import ollama
 from datetime import datetime
 import numpy as np
 import logging
-import re
 
 from ..config import DEFAULT_MODEL_NAME
 from ..models.message import Message
@@ -179,6 +178,7 @@ Guidelines for your response:
 
 Context (synthesize ALL 3 chunks):
 """
+
             prompt += f"{context}\n\n"
         else:
             prompt = "You are a helpful AI assistant. Provide a concise answer:\n\n"
